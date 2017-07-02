@@ -1,0 +1,9 @@
+{
+"dataset_path" : "trained_all.csv",
+"dataset_separator" : ";",
+"columns_to_remove": ["Unnamed: 0", "Autoclass", "Color 1", "Color 2", "Image", "Images", "Description", "Overview" ],
+"columns_to_encode":["Category"],
+"columns_to_do_tfidf":["Product name"],
+"should_purify" : true,
+"rows_to_debug": 5
+}
