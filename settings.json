@@ -9,10 +9,18 @@
 "clustering_settings": {
   "algorithm" : "kmeans",
   "number_of_cluster" : 30,
-  "target_column" : "Cluster"
+  "target_column" : "Cluster",
+  "kmeans_params": {
+    
+  },
+  "dbscan_params" : {
+
+  },
+  "kmodes_params": {
+
+  }
 
 },
-
 
 "rows_to_debug": 5
 }

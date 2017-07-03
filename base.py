@@ -6,17 +6,13 @@ import re
 import json
 import inspect
 
-
 #import seaborn as sns
-
 
 import glob
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
 from nltk.stem.snowball import SnowballStemmer
 from nltk.stem import WordNetLemmatizer
-
-
 
 from sklearn.cross_validation import train_test_split
 from sklearn.preprocessing import Imputer
@@ -31,9 +27,6 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.datasets import make_hastie_10_2
 from sklearn.ensemble import GradientBoostingClassifier
-
-
-
 
 from sklearn.ensemble import VotingClassifier
 
@@ -87,13 +80,16 @@ class Pipeline:
 		self.steps = []
 		self.currentObject = None
 
+
 	def addStep(self, step):
 		self.steps.append(step)
+
 
 	def executePipeline(self):
 		for step in self.steps:
 			out = step.execute(self.currentObject)
 			self.currentObject = out
+
 
 
 class Step(ABC):
@@ -102,6 +98,8 @@ class Step(ABC):
 		pass
 
 
+
+#data loader
 class DataLoader(Step):
 
 	def __init__(self):
@@ -113,22 +111,22 @@ class DataLoader(Step):
 		pprint(inspect.stack()[0][3])
 		encoded_df = pd.read_csv(self.datasetName, sep=self.datasetSeparator)
 		encoded_df = encoded_df.fillna(method='ffill')
-
 		return encoded_df
 
 
 
+#encoders, tranformators, cleaners, removers
 class ColumnsRemover(Step):
 
 	def __init__(self):
 		self.columns = settings["columns_to_remove"]
+
 
 	def execute(self, df):
 		pprint(self.__class__.__name__)
 		pprint(inspect.stack()[0][3])
 		for c in self.columns:
 			df.drop(c, axis=1, inplace=True)
-
 		pprint(df.head(settings["rows_to_debug"]))
 		return df
 
@@ -164,7 +162,6 @@ class ColumnsEncoder(Step):
 
 
 
-
 class TfIdfProcessor(Step):
 
 	def __init__(self):
@@ -194,7 +191,6 @@ class TfIdfProcessor(Step):
 		return filtered_tokens
 
 
-
 	def getTfIdfMatrixForDF(self, df):
 		local_df = df
 		tfidf_vectorizer = TfidfVectorizer(max_df=0.99, max_features=3000, min_df=0.0001, stop_words='english', use_idf=True, tokenizer=self.tokenize_and_stem, ngram_range=(1,1))
@@ -218,6 +214,8 @@ class TfIdfProcessor(Step):
 
 		return transformed
 
+
+
 class Purifier(Step):
 
     def __init__(self):
@@ -238,18 +236,68 @@ class Purifier(Step):
 
 
 
-pipeline = Pipeline()
+#algorithm factories
+class AlgorithmAbstractFactory(ABC):
+	@abstractmethod
+	def generate(self):
+		pass
 
-s1 = DataLoader()
-s2 = ColumnsRemover()
-s3 = ColumnsEncoder()
-s4 = TfIdfProcessor()
-s5 = Purifier()
 
-pipeline.addStep(s1)
-pipeline.addStep(s2)
-pipeline.addStep(s3)
-pipeline.addStep(s4)
-pipeline.addStep(s5)
+class ClusteringFactory(AlgorithmAbstractFactory):
+    def __init__(self):
+        self.problem = settings["clustering_settings"]["algorithm"]
 
-pipeline.executePipeline()
+    def generate(self):
+        pass
+
+class ClassificationFactory(AlgorithmAbstractFactory):
+    def __init__(self):
+        self.problem = settings["classification_settings"]["algorithm"]
+
+
+
+class RegressionFactory(AlgorithmAbstractFactory):
+    def __init__(self):
+        self.problem = settings["regression_settings"]["algorithm"]
+
+
+class ProblemFactory():
+    def __init__(self):
+        self.problem = settings["problem"]
+
+    def generate(self):
+        if self.problem == "clustering":
+            print("Clustering problem")
+            return ClusteringFactory()
+        elif self.problem == "classification":
+            return ClassificationFactory()
+        elif self.problem == "regression":
+            return RegressionFactory()
+        else:
+            raise NotImplementedError
+
+
+
+
+class XandraApp():
+
+    def run(self):
+        pipeline = Pipeline()
+
+        s1 = DataLoader()
+        s2 = ColumnsRemover()
+        s3 = ColumnsEncoder()
+        s4 = TfIdfProcessor()
+        s5 = Purifier()
+
+        pipeline.addStep(s1)
+        pipeline.addStep(s2)
+        pipeline.addStep(s3)
+        pipeline.addStep(s4)
+        pipeline.addStep(s5)
+        #f = ProblemFactory().generate()
+        pipeline.executePipeline()
+
+if __name__ == "__main__":
+    app = XandraApp()
+    app.run()
