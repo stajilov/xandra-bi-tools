@@ -5,5 +5,14 @@
 "columns_to_encode":["Category"],
 "columns_to_do_tfidf":["Product name"],
 "should_purify" : true,
+"problem" : "clustering",
+"clustering_settings": {
+  "algorithm" : "kmeans",
+  "number_of_cluster" : 30,
+  "target_column" : "Cluster"
+
+},
+
+
 "rows_to_debug": 5
 }
