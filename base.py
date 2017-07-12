@@ -33,6 +33,11 @@ from sklearn.ensemble import VotingClassifier
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neighbors import KNeighborsClassifier
 
+from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.preprocessing import StandardScaler
+
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.preprocessing import Normalizer
 from sklearn.neural_network import MLPClassifier
@@ -235,6 +240,65 @@ class Purifier(Step):
 
 
 
+#clustering algorithms
+class KMeansAlgorithm(Step):
+    def __init__(self):
+        self.params = settings["clustering_settings"]["kmeans_params"]
+        self.newColumn = settings["clustering_settings"]["target_column"]
+
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+
+        km = KMeans(**self.params)
+        km.fit(df)
+        clusters = km.labels_.tolist()
+        df[self.newColumn] = clusters
+        pprint(df.head(settings["rows_to_debug"]))
+        return df
+
+class HierarchicalAlgorithm(Step):
+    def __init__(self):
+        self.params = settings["clustering_settings"]["hierachical_params"]
+        self.newColumn = settings["clustering_settings"]["target_column"]
+
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+
+        hierarchical = AgglomerativeClustering(**self.params)
+        hierarchical.fit(df)
+        clusters = hierarchical.labels_.tolist()
+        df[self.newColumn] = clusters
+        pprint(df.head(settings["rows_to_debug"]))
+        return df
+
+class DBScanAlgorithm(Step):
+    def __init__(self):
+        self.params = settings["clustering_settings"]["dbscan_params"]
+        self.newColumn = settings["clustering_settings"]["target_column"]
+
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+
+        #dbScan = DBSCAN()
+        #dbScan.fit(df)
+        loc_df = StandardScaler().fit_transform(df)
+        db = DBSCAN(**self.params).fit(loc_df)
+        core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+        core_samples_mask[db.core_sample_indices_] = True
+        #labels = db.labels_
+        clusters = db.labels_.tolist()
+        print(clusters)
+
+
+        loc_df[self.newColumn] = clusters
+        pprint(df.head(settings["rows_to_debug"]))
+
+        return loc_df
+
+
 
 #algorithm factories
 class AlgorithmAbstractFactory(ABC):
@@ -245,10 +309,18 @@ class AlgorithmAbstractFactory(ABC):
 
 class ClusteringFactory(AlgorithmAbstractFactory):
     def __init__(self):
-        self.problem = settings["clustering_settings"]["algorithm"]
+        self.algorithm = settings["clustering_settings"]["algorithm"]
 
     def generate(self):
-        pass
+        if self.algorithm == "kmeans":
+            print("K Means")
+            return KMeansAlgorithm()
+        elif self.algorithm == "dbscan":
+            return DBScanAlgorithm()
+        elif self.algorithm == "hierarchical":
+            return HierarchicalAlgorithm()
+        else:
+            raise NotImplementedError
 
 class ClassificationFactory(AlgorithmAbstractFactory):
     def __init__(self):
@@ -289,13 +361,14 @@ class XandraApp():
         s3 = ColumnsEncoder()
         s4 = TfIdfProcessor()
         s5 = Purifier()
+        s6 = ProblemFactory().generate().generate()
 
         pipeline.addStep(s1)
         pipeline.addStep(s2)
         pipeline.addStep(s3)
         pipeline.addStep(s4)
         pipeline.addStep(s5)
-        #f = ProblemFactory().generate()
+        pipeline.addStep(s6)
         pipeline.executePipeline()
 
 if __name__ == "__main__":
