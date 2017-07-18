@@ -5,6 +5,7 @@ import nltk
 import re
 import json
 import inspect
+import glob
 
 #import seaborn as sns
 
@@ -103,13 +104,12 @@ class Step(ABC):
 		pass
 
 
-
-#data loader
-class DataLoader(Step):
+#csv loader
+class CsvLoader(Step):
 
 	def __init__(self):
-		self.datasetName = settings["dataset_path"]
-		self.datasetSeparator = settings["dataset_separator"]
+		self.datasetName = settings["csv_path"]
+		self.datasetSeparator = settings["csv_separator"]
 
 	def execute(self, o):
 		pprint(self.__class__.__name__)
@@ -117,6 +117,31 @@ class DataLoader(Step):
 		encoded_df = pd.read_csv(self.datasetName, sep=self.datasetSeparator)
 		encoded_df = encoded_df.fillna(method='ffill')
 		return encoded_df
+
+#document loader
+class DocumentLoader(Step):
+    def __init__(self):
+        self.documentDirectory = settings["documents_path"]
+        self.documentsExtension = settings["documents_extension"]
+        self.path = self.documentDirectory + "*" +  self.documentsExtension
+        self.columnName = settings["text_column_name"]
+
+
+    def execute(self, o):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        files = glob.glob(self.path)
+        df = pd.DataFrame(columns=[self.columnName])
+        for i in range(len(files)):
+            file = files[i]
+            f = open(file, 'r')
+            content = f.read()
+            #print(content)
+            df.loc[i] = content
+            f.close()
+
+        pprint(df.head(settings["rows_to_debug"]))
+        return df
 
 
 
@@ -169,55 +194,53 @@ class ColumnsEncoder(Step):
 
 class TfIdfProcessor(Step):
 
-	def __init__(self):
-		self.columns = settings["columns_to_do_tfidf"]
+    def __init__(self):
+        self.columns = settings["columns_to_do_tfidf"]
 
-
-	def tokenize_and_stem(self,text):
-		tokens = [word for sent in nltk.sent_tokenize(text) for word in nltk.word_tokenize(sent)]
-		filtered_tokens = []
-		for token in tokens:
-			if re.search('[a-zA-Z]', token):
-				filtered_tokens.append(token)
+    def tokenize_and_stem(self,text):
+        tokens = [word for sent in nltk.sent_tokenize(text) for word in nltk.word_tokenize(sent)]
+        filtered_tokens = []
+        for token in tokens:
+            if re.search('[a-zA-Z]', token):
+                filtered_tokens.append(token)
 		#stems = [wordnet_lemmatizer.lemmatize(t) for t in filtered_tokens]
-		stems = [stemmer.stem(t) for t in filtered_tokens]
-		return stems
+        stems = [stemmer.stem(t) for t in filtered_tokens]
+
+        return stems
 
 
-	def tokenize_only(text):
+    def tokenize_only(text):
     # first tokenize by sentence, then by word to ensure that punctuation is caught as it's own token
-		tokens = [word.lower() for sent in nltk.sent_tokenize(text) for word in nltk.word_tokenize(sent)]
-		filtered_tokens = []
+        tokens = [word.lower() for sent in nltk.sent_tokenize(text) for word in nltk.word_tokenize(sent)]
+        filtered_tokens = []
     # filter out any tokens not containing letters (e.g., numeric tokens, raw punctuation)
-		for token in tokens:
-			if re.search('[a-zA-Z]', token):
-				filtered_tokens.append(token)
+        for token in tokens:
+           if re.search('[a-zA-Z]', token):
+               filtered_tokens.append(token)
+        return filtered_tokens
 
-		return filtered_tokens
+    def getTfIdfMatrixForDF(self, df):
+        local_df = df
+        tfidf_vectorizer = TfidfVectorizer(max_df=0.99, max_features=3000, min_df=1, stop_words='english',
+        use_idf=True, tokenizer=self.tokenize_and_stem, ngram_range=(1,1))
+        for c in self.columns:
+            print(c)
+            valuesOfDF = local_df.pop(c).values
+            print(valuesOfDF)
+            X = tfidf_vectorizer.fit_transform(valuesOfDF.astype('U')).toarray()
+            for i, col in enumerate(tfidf_vectorizer.get_feature_names()):
+                local_df[col] = X[:, i]
 
 
-	def getTfIdfMatrixForDF(self, df):
-		local_df = df
-		tfidf_vectorizer = TfidfVectorizer(max_df=0.99, max_features=3000, min_df=0.0001, stop_words='english', use_idf=True, tokenizer=self.tokenize_and_stem, ngram_range=(1,1))
+        return local_df
 
-		for c in self.columns:
-			print(c)
-			valuesOfDF = local_df.pop(c).values
-			X = tfidf_vectorizer.fit_transform(valuesOfDF.astype('U')).toarray()
-		#print(tfidf_vectorizer.get_feature_names())
-			for i, col in enumerate(tfidf_vectorizer.get_feature_names()):
-				local_df[col] = X[:, i]
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
 
-		return local_df
-
-	def execute(self, df):
-		pprint(self.__class__.__name__)
-		pprint(inspect.stack()[0][3])
-
-		transformed = self.getTfIdfMatrixForDF(df)
-		pprint(transformed.head(settings["rows_to_debug"]))
-
-		return transformed
+        transformed = self.getTfIdfMatrixForDF(df)
+        pprint(transformed.head(settings["rows_to_debug"]))
+        return transformed
 
 
 
@@ -356,16 +379,16 @@ class XandraApp():
     def run(self):
         pipeline = Pipeline()
 
-        s1 = DataLoader()
-        s2 = ColumnsRemover()
-        s3 = ColumnsEncoder()
+        s1 = DocumentLoader()
+        #s2 = ColumnsRemover()
+        #s3 = ColumnsEncoder()
         s4 = TfIdfProcessor()
         s5 = Purifier()
         s6 = ProblemFactory().generate().generate()
 
         pipeline.addStep(s1)
-        pipeline.addStep(s2)
-        pipeline.addStep(s3)
+        #pipeline.addStep(s2)
+        #pipeline.addStep(s3)
         pipeline.addStep(s4)
         pipeline.addStep(s5)
         pipeline.addStep(s6)

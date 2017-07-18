@@ -1,13 +1,18 @@
 {
-"dataset_path" : "trained_all.csv",
-"dataset_separator" : ";",
+"csv_path" : "trained_all.csv",
+"csv_separator" : ";",
+"documents_path" : "/Users/macbook/Documents/Work/xandra-bi-tools/xandra-bi-tools/sample_documents/",
+"documents_extension" : ".txt",
+"text_column_name" : "Text",
 "columns_to_remove": ["Unnamed: 0", "Autoclass", "Color 1", "Color 2", "Image", "Images", "Description", "Overview", "Url" ],
 "columns_to_encode":["Category"],
-"columns_to_do_tfidf":["Product name"],
+"columns_to_do_tfidf":["Text"],
 "should_purify" : true,
+"target_document" : "Tonight we fall",
+"target_doc_number" : 5,
 "problem" : "clustering",
 "clustering_settings": {
-  "algorithm" : "hierarchical",
+  "algorithm" : "kmeans",
   "number_of_cluster" : 30,
   "target_column" : "Cluster",
   "kmeans_params": {
@@ -36,7 +41,7 @@
     "n_clusters": 2,
     "affinity" : "euclidean",
     "compute_full_tree" : "auto",
-    "linkage":"ward"
+    "linkage":"average"
   },
   "kmodes_params": {
 
