@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+
 import sysimport pandas as pdimport numpy as np
 import nltk
 import re
@@ -49,6 +50,7 @@ from sklearn import svm
 from sklearn.metrics import accuracy_score
 
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import linear_kernel
 
 from sklearn.pipeline import Pipeline
 
@@ -118,6 +120,40 @@ class CsvLoader(Step):
 		encoded_df = encoded_df.fillna(method='ffill')
 		return encoded_df
 
+
+#xlsx loader
+class XlsxLoader(Step):
+
+    def __init__(self):
+        self.datasetName = settings["xlsx_path"]
+        self.sheetName = settings["sheet_name"]
+
+    def execute(self, o):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        encoded_df = pd.read_excel(open(self.datasetName,'rb'), sheetname=self.sheetName)
+        encoded_df = encoded_df.fillna(method='ffill')
+        pprint(encoded_df.head(settings["rows_to_debug"]))
+        pprint(encoded_df.shape)
+        return encoded_df
+
+#target document loader
+class TargetDocumentLoader(Step):
+    def __init__(self):
+        self.documentDirectory = settings["documents_path"]
+        self.documentsExtension = settings["documents_extension"]
+        self.contentToWrite = settings["lookup_settings"]["target_document_text"]
+
+    def execute(self, o):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        fileName = self.documentDirectory + "000000000000" + self.documentsExtension
+        file = open(fileName, 'w+')
+        file.write(self.contentToWrite)
+        file.close()
+
+
+
 #document loader
 class DocumentLoader(Step):
     def __init__(self):
@@ -140,7 +176,7 @@ class DocumentLoader(Step):
             df.loc[i] = content
             f.close()
 
-        pprint(df.head(settings["rows_to_debug"]))
+        #pprint(df.head(settings["rows_to_debug"]))
         return df
 
 
@@ -203,8 +239,8 @@ class TfIdfProcessor(Step):
         for token in tokens:
             if re.search('[a-zA-Z]', token):
                 filtered_tokens.append(token)
-		#stems = [wordnet_lemmatizer.lemmatize(t) for t in filtered_tokens]
-        stems = [stemmer.stem(t) for t in filtered_tokens]
+        stems = [wordnet_lemmatizer.lemmatize(t) for t in filtered_tokens]
+        #stems = [stemmer.stem(t) for t in filtered_tokens]
 
         return stems
 
@@ -230,7 +266,6 @@ class TfIdfProcessor(Step):
             X = tfidf_vectorizer.fit_transform(valuesOfDF.astype('U')).toarray()
             for i, col in enumerate(tfidf_vectorizer.get_feature_names()):
                 local_df[col] = X[:, i]
-
 
         return local_df
 
@@ -262,6 +297,25 @@ class Purifier(Step):
             return df
 
 
+#lookup algorithms
+
+class CosineSimilarityAlgorithm(Step):
+    def __init__(self):
+        self.params = settings["lookup_settings"]["similarity_params"]
+        self.path = settings["documents_path"]
+        #self.newColumn = settings["clustering_settings"]["target_column"]
+
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        cosine_similarities = linear_kernel(df[0:1], df).flatten()
+        print(cosine_similarities)
+        numberOfDocsToFetch = self.params["target_doc_number"]
+        related_docs_indices = cosine_similarities.argsort()[:-5:-1]
+        print(related_docs_indices)
+        print(cosine_similarities[related_docs_indices])
+
+
 
 #clustering algorithms
 class KMeansAlgorithm(Step):
@@ -277,7 +331,9 @@ class KMeansAlgorithm(Step):
         km.fit(df)
         clusters = km.labels_.tolist()
         df[self.newColumn] = clusters
+        print(set(clusters))
         pprint(df.head(settings["rows_to_debug"]))
+        df.to_csv(settings["df_dump_file_name"], index=False, encoding='utf-8')
         return df
 
 class HierarchicalAlgorithm(Step):
@@ -322,6 +378,60 @@ class DBScanAlgorithm(Step):
         return loc_df
 
 
+#splitter
+class TrainTestSplitter(Step):
+
+    def __init__(self):
+        self.trainTestRatio = settings["train_test_split_ratio"]
+        self.targetColumn = settings["classification_regression_target"]
+
+    def execute(self, df):
+        y = df.pop(self.targetColumn)
+        X = df
+        X_train,X_test,y_train,y_test = train_test_split(X.index,y,test_size=0.2)
+
+        df_train = X.iloc[X_train]
+        df_test = X.iloc[X_test]
+
+        return df_train,df_test,y_train,y_test
+
+
+#Feature inspect
+class FeatureInspector():
+    def __init__(self):
+        self.trainTestRatio = settings["train_test_split_ratio"]
+
+    def execute(self, clf):
+        importances  = sorted(clf.feature_importances_)
+        print("Number of features: ")
+        print(len(importances))
+        importantFeatures = list(filter(lambda x: x > 0.0, importances))
+        if len(importantFeatures) < 10:
+            print(importantFeatures)
+
+        print("Number of important features: ")
+        print(len(importantFeatures))
+
+
+#classificaion algorithms
+
+class RFTClassifierAlgorithm(Step):
+
+    def __init__(self):
+        self.params = settings["classification_settings"]["rftclassifier_params"]
+
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        ttSplitter = TrainTestSplitter()
+        X_train,X_test,y_train,y_test = ttSplitter.execute(df)
+        clf = RandomForestClassifier(**self.params)
+        clf.fit(X_train, y_train)
+        fInsp = FeatureInspector()
+        fInsp.execute(clf)
+        predictions = clf.predict(X_test)
+        print("Accuracy is ", accuracy_score(y_test,predictions)*100,"%", "for params: ", self.params)
+
 
 #algorithm factories
 class AlgorithmAbstractFactory(ABC):
@@ -347,13 +457,37 @@ class ClusteringFactory(AlgorithmAbstractFactory):
 
 class ClassificationFactory(AlgorithmAbstractFactory):
     def __init__(self):
-        self.problem = settings["classification_settings"]["algorithm"]
+        self.algorithm = settings["classification_settings"]["algorithm"]
+
+    def generate(self):
+        if self.algorithm == "random_forest_trees":
+            print("RFT")
+            return RFTClassifierAlgorithm()
+        elif self.algorithm == "knearest":
+            return DBScanAlgorithm()
+        elif self.algorithm == "svm":
+            return HierarchicalAlgorithm()
+        else:
+            raise NotImplementedError
+
 
 
 
 class RegressionFactory(AlgorithmAbstractFactory):
     def __init__(self):
         self.problem = settings["regression_settings"]["algorithm"]
+
+
+class LookupFactory(AlgorithmAbstractFactory):
+    def __init__(self):
+        self.algorithm = settings["lookup_settings"]["algorithm"]
+
+    def generate(self):
+        if self.algorithm == "cosine_similarity":
+            print("Cosine Similarity")
+            return CosineSimilarityAlgorithm()
+        else:
+            raise NotImplementedError
 
 
 class ProblemFactory():
@@ -368,6 +502,8 @@ class ProblemFactory():
             return ClassificationFactory()
         elif self.problem == "regression":
             return RegressionFactory()
+        elif self.problem == "lookup":
+            return LookupFactory()
         else:
             raise NotImplementedError
 
@@ -379,15 +515,18 @@ class XandraApp():
     def run(self):
         pipeline = Pipeline()
 
-        s1 = DocumentLoader()
+        #s1 = XlsxLoader()
+        s2 = DocumentLoader()
+        s1 = TargetDocumentLoader()
         #s2 = ColumnsRemover()
         #s3 = ColumnsEncoder()
         s4 = TfIdfProcessor()
         s5 = Purifier()
         s6 = ProblemFactory().generate().generate()
 
+        #pipeline.addStep(s0)
         pipeline.addStep(s1)
-        #pipeline.addStep(s2)
+        pipeline.addStep(s2)
         #pipeline.addStep(s3)
         pipeline.addStep(s4)
         pipeline.addStep(s5)

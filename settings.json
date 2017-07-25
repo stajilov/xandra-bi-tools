@@ -1,22 +1,52 @@
 {
 "csv_path" : "trained_all.csv",
+"xlsx_path": "transactions.xlsx",
+"df_dump_file_name" : "temp.csv",
+"sheet_name" : "new",
 "csv_separator" : ";",
 "documents_path" : "/Users/macbook/Documents/Work/xandra-bi-tools/xandra-bi-tools/sample_documents/",
 "documents_extension" : ".txt",
 "text_column_name" : "Text",
-"columns_to_remove": ["Unnamed: 0", "Autoclass", "Color 1", "Color 2", "Image", "Images", "Description", "Overview", "Url" ],
-"columns_to_encode":["Category"],
+"columns_to_remove": ["Posted Date"],
+"columns_to_encode":["Bank Name", "Account Type", "Trans Type", "Category"],
 "columns_to_do_tfidf":["Text"],
 "should_purify" : true,
-"target_document" : "Tonight we fall",
-"target_doc_number" : 5,
-"problem" : "clustering",
+"train_test_split_ratio" : 0.2,
+"classification_regression_target" : "Category",
+
+"problem" : "lookup",
+"lookup_settings" : {
+  "algorithm":"cosine_similarity",
+  "target_document_text" : "who is the king?",
+  "similarity_params" : {
+    "target_doc_number" : 5
+  }
+},
+
+"classification_settings" : {
+  "algorithm" : "random_forest_trees",
+  "rftclassifier_params": {
+    "criterion":"gini",
+    "min_samples_split":2,
+    "min_samples_leaf":1,
+    "min_weight_fraction_leaf":0.0,
+    "max_features":"auto",
+    "min_impurity_split":1e-07,
+    "bootstrap":true,
+    "oob_score":false,
+    "n_jobs":1,
+    "verbose":0,
+    "warm_start":false
+  }
+
+},
+
 "clustering_settings": {
   "algorithm" : "kmeans",
   "number_of_cluster" : 30,
   "target_column" : "Cluster",
   "kmeans_params": {
-    "n_clusters" : 8,
+    "n_clusters" : 4,
     "init" : "k-means++",
     "n_init":10,
     "max_iter":300,
