@@ -52,6 +52,10 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics.pairwise import linear_kernel
 
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import RobustScaler
+
+
 from sklearn.pipeline import Pipeline
 
 from pprint import pprint
@@ -291,7 +295,13 @@ class Purifier(Step):
         if(self.shouldPurify):
             local_df = df.fillna(method='ffill')
             local_df = local_df.rename(columns = {'fit': 'fit_feature'})
+
+            floatColumns = settings["float_columns_to_clean"]
+            for fc in floatColumns:
+                #local_df[fc] = local_df[fc].apply(lambda x: float(x.split()[0].replace('$', '')))
+                local_df[fc] = local_df[fc].apply(lambda x: float(x.split()[0].replace(',', '')))
             pprint(local_df.head(settings["rows_to_debug"]))
+
             return local_df
         else:
             return df
@@ -425,6 +435,7 @@ class ClassifierAlgorithm(Step):
 class RFTClassifierAlgorithm(ClassifierAlgorithm):
 
     def __init__(self):
+        print("Calling init")
         self.params = settings["classification_settings"]["rftclassifier_params"]
 
     def execute(self, df):
@@ -452,9 +463,9 @@ class SVMClassifierAlgorithm(ClassifierAlgorithm):
         print("Accuracy is ", accuracy_score(y_test,predictions)*100,"% for params:",self.params)
 
 
-class KNearestNeighboursNClassifierAlgorithm(ClassifierAlgorithm):
+class KNNClassifierAlgorithm(ClassifierAlgorithm):
 
-    def __init___(self):
+    def __init__(self):
         self.params = settings["classification_settings"]["knnclassifier_params"]
 
 
@@ -467,6 +478,41 @@ class KNearestNeighboursNClassifierAlgorithm(ClassifierAlgorithm):
         clf.fit(X_train, y_train)
         predictions = clf.predict(X_test)
         print("Accuracy is ", accuracy_score(y_test,predictions)*100,"% for params:",self.params)
+
+#AdaBoost, NN, GradientBoosted
+class AdaBoostClassifierAlgorithm(ClassifierAlgorithm):
+
+    def __init__(self):
+        self.params = settings["classification_settings"]["adaboostclassifier_params"]
+
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        X_train,X_test,y_train,y_test = self.trainTestSplitDataframe(df)
+        clf = AdaBoostClassifier(**self.params)
+        clf.fit(X_train, y_train)
+        fInsp = FeatureInspector()
+        fInsp.execute(clf)
+        predictions = clf.predict(X_test)
+        print("Accuracy is ", accuracy_score(y_test,predictions)*100,"%", "for params: ", self.params)
+
+class MultiLayerPerceptronClassifierAlgorithm(ClassifierAlgorithm):
+
+    def __init__(self):
+        self.params = settings["classification_settings"]["multilayerperceptron_params"]
+
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        X_train,X_test,y_train,y_test = self.trainTestSplitDataframe(df)
+        clf = MLPClassifier(**self.params)
+        clf.fit(X_train, y_train)
+        predictions = clf.predict(X_test)
+        print("Accuracy is ", accuracy_score(y_test,predictions)*100,"%", "for params: ", self.params)
+
+class GradientBoostingClassifierAlgorithm(ClassifierAlgorithm):
+    def __init__(self):
+        self.params = settings["classification_settings"]["gradientboosting_params"]
 
 #algorithm factories
 class AlgorithmAbstractFactory(ABC):
@@ -495,15 +541,21 @@ class ClassificationFactory(AlgorithmAbstractFactory):
         self.algorithm = settings["classification_settings"]["algorithm"]
 
     def generate(self):
-        if self.algorithm == "random_forest_trees":
+        if self.algorithm == "rft":
             print("RFT")
             return RFTClassifierAlgorithm()
         elif self.algorithm == "knn":
             print("KNN")
-            return KNearestNeighboursNClassifierAlgorithm()
+            return KNNClassifierAlgorithm()
         elif self.algorithm == "svm":
             print("SVM")
             return SVMClassifierAlgorithm()
+        elif self.algorithm == "adaboost":
+            print("Ada boost")
+            return AdaBoostClassifierAlgorithm()
+        elif self.algorithm == "mlp":
+            print("Ada boost")
+            return MultiLayerPerceptronClassifierAlgorithm()
         else:
             raise NotImplementedError
 

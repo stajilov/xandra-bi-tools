@@ -1,16 +1,20 @@
 {
-"csv_path" : "transactions.csv",
+"csv_path" : "transactions_raw.csv",
 "xlsx_path": "transactions.xlsx",
 "df_dump_file_name" : "temp.csv",
 "sheet_name" : "new",
-"csv_separator" : ";",
+"csv_separator" : ",",
+
 "documents_path" : "/Users/macbook/Documents/Work/xandra-bi-tools/xandra-bi-tools/sample_documents/",
 "documents_extension" : ".txt",
 "text_column_name" : "Text",
-"columns_to_remove": ["Posted Date"],
-"columns_to_encode":["Bank Name", "Account Type", "Trans Type", "Category"],
-"columns_to_do_tfidf":["Description"],
+
+"columns_to_remove": [],
+"columns_to_encode":["Bank", "Account Type", "Transaction Type", "Category"],
+"columns_to_do_tfidf":["Memo"],
 "should_purify" : true,
+"float_columns_to_clean" :[],
+
 "train_test_split_ratio" : 0.2,
 "classification_regression_target" : "Category",
 
@@ -23,7 +27,7 @@
 },
 
 "classification_settings" : {
-  "algorithm" : "knn",
+  "algorithm" : "mlp",
   "rftclassifier_params": {
     "criterion":"gini",
     "min_samples_split":2,
@@ -59,6 +63,40 @@
     "p":2,
     "metric":"minkowski",
     "n_jobs":1
+  },
+
+  "adaboostclassifier_params": {
+    "n_estimators":50,
+    "learning_rate":1.0,
+    "algorithm":"SAMME.R"
+  },
+
+  "multilayerperceptron_params": {
+    "activation":"relu",
+    "alpha":0.0001,
+    "batch_size":"auto",
+    "beta_1":0.9,
+    "beta_2":0.999,
+    "early_stopping":false,
+    "epsilon":1e-08,
+    "hidden_layer_sizes":[50, 50, 50],
+    "learning_rate":"constant",
+    "learning_rate_init":0.001,
+    "max_iter":100,
+    "momentum":0.9,
+    "nesterovs_momentum":true,
+    "power_t":0.5,
+    "shuffle":true,
+    "solver":"adam",
+    "tol":0.0001,
+    "validation_fraction":0.1,
+    "verbose":false,
+    "warm_start":false
+
+  },
+
+  "gradientboosting_params":{
+    
   }
 
 
