@@ -2,4 +2,6 @@ trained_all.csv
 .DS_Store
 *.DS_Store
 transactions.xlsx
+transactions_raw.csv
+transactions_trained.csv
 temp.csv

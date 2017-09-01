@@ -1,5 +1,5 @@
 {
-"csv_path" : "trained_all.csv",
+"csv_path" : "transactions.csv",
 "xlsx_path": "transactions.xlsx",
 "df_dump_file_name" : "temp.csv",
 "sheet_name" : "new",
@@ -9,14 +9,13 @@
 "text_column_name" : "Text",
 "columns_to_remove": ["Posted Date"],
 "columns_to_encode":["Bank Name", "Account Type", "Trans Type", "Category"],
-"columns_to_do_tfidf":["Text"],
+"columns_to_do_tfidf":["Description"],
 "should_purify" : true,
 "train_test_split_ratio" : 0.2,
 "classification_regression_target" : "Category",
 
-"problem" : "lookup",
+"problem" : "classification",
 "lookup_settings" : {
-  "algorithm":"cosine_similarity",
   "target_document_text" : "who is the king?",
   "similarity_params" : {
     "target_doc_number" : 5
@@ -24,7 +23,7 @@
 },
 
 "classification_settings" : {
-  "algorithm" : "random_forest_trees",
+  "algorithm" : "knn",
   "rftclassifier_params": {
     "criterion":"gini",
     "min_samples_split":2,
@@ -37,7 +36,31 @@
     "n_jobs":1,
     "verbose":0,
     "warm_start":false
+  },
+  "svmclassifier_params" : {
+    "C":2.0,
+    "kernel":"rbf",
+    "degree":3,
+    "gamma":"auto",
+    "coef0":0.0,
+    "shrinking":true,
+    "probability":false,
+    "tol":0.001,
+    "cache_size":200,
+    "verbose":false,
+    "max_iter":-1,
+    "decision_function_shape":"ovr"
+  },
+  "knnclassifier_params": {
+    "n_neighbors":5,
+    "weights":"uniform",
+    "algorithm":"auto",
+    "leaf_size":30,
+    "p":2,
+    "metric":"minkowski",
+    "n_jobs":1
   }
+
 
 },
 

@@ -415,7 +415,14 @@ class FeatureInspector():
 
 #classificaion algorithms
 
-class RFTClassifierAlgorithm(Step):
+class ClassifierAlgorithm(Step):
+    def trainTestSplitDataframe(self, df):
+        ttSplitter = TrainTestSplitter()
+        X_train,X_test,y_train,y_test = ttSplitter.execute(df)
+        return X_train,X_test,y_train,y_test
+
+
+class RFTClassifierAlgorithm(ClassifierAlgorithm):
 
     def __init__(self):
         self.params = settings["classification_settings"]["rftclassifier_params"]
@@ -423,8 +430,7 @@ class RFTClassifierAlgorithm(Step):
     def execute(self, df):
         pprint(self.__class__.__name__)
         pprint(inspect.stack()[0][3])
-        ttSplitter = TrainTestSplitter()
-        X_train,X_test,y_train,y_test = ttSplitter.execute(df)
+        X_train,X_test,y_train,y_test = self.trainTestSplitDataframe(df)
         clf = RandomForestClassifier(**self.params)
         clf.fit(X_train, y_train)
         fInsp = FeatureInspector()
@@ -432,6 +438,35 @@ class RFTClassifierAlgorithm(Step):
         predictions = clf.predict(X_test)
         print("Accuracy is ", accuracy_score(y_test,predictions)*100,"%", "for params: ", self.params)
 
+class SVMClassifierAlgorithm(ClassifierAlgorithm):
+    def __init__(self):
+        self.params = settings["classification_settings"]["svmclassifier_params"]
+
+    def execute(self,df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        X_train,X_test,y_train,y_test = self.trainTestSplitDataframe(df)
+        clf = svm.SVC(**self.params)
+        clf.fit(X_train, y_train)
+        predictions = clf.predict(X_test)
+        print("Accuracy is ", accuracy_score(y_test,predictions)*100,"% for params:",self.params)
+
+
+class KNearestNeighboursNClassifierAlgorithm(ClassifierAlgorithm):
+
+    def __init___(self):
+        self.params = settings["classification_settings"]["knnclassifier_params"]
+
+
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        print(self.params)
+        X_train,X_test,y_train,y_test = self.trainTestSplitDataframe(df)
+        clf = KNeighborsClassifier(**self.params)
+        clf.fit(X_train, y_train)
+        predictions = clf.predict(X_test)
+        print("Accuracy is ", accuracy_score(y_test,predictions)*100,"% for params:",self.params)
 
 #algorithm factories
 class AlgorithmAbstractFactory(ABC):
@@ -463,10 +498,12 @@ class ClassificationFactory(AlgorithmAbstractFactory):
         if self.algorithm == "random_forest_trees":
             print("RFT")
             return RFTClassifierAlgorithm()
-        elif self.algorithm == "knearest":
-            return DBScanAlgorithm()
+        elif self.algorithm == "knn":
+            print("KNN")
+            return KNearestNeighboursNClassifierAlgorithm()
         elif self.algorithm == "svm":
-            return HierarchicalAlgorithm()
+            print("SVM")
+            return SVMClassifierAlgorithm()
         else:
             raise NotImplementedError
 
@@ -515,11 +552,11 @@ class XandraApp():
     def run(self):
         pipeline = Pipeline()
 
-        #s1 = XlsxLoader()
-        s2 = DocumentLoader()
-        s1 = TargetDocumentLoader()
-        #s2 = ColumnsRemover()
-        #s3 = ColumnsEncoder()
+        s1 = CsvLoader()
+        #s2 = DocumentLoader()
+        #s1 = TargetDocumentLoader()
+        s2 = ColumnsRemover()
+        s3 = ColumnsEncoder()
         s4 = TfIdfProcessor()
         s5 = Purifier()
         s6 = ProblemFactory().generate().generate()
@@ -527,7 +564,7 @@ class XandraApp():
         #pipeline.addStep(s0)
         pipeline.addStep(s1)
         pipeline.addStep(s2)
-        #pipeline.addStep(s3)
+        pipeline.addStep(s3)
         pipeline.addStep(s4)
         pipeline.addStep(s5)
         pipeline.addStep(s6)
