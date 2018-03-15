@@ -13,6 +13,8 @@ import glob
 import glob
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
+from sklearn.feature_selection import VarianceThreshold
+
 from nltk.stem.snowball import SnowballStemmer
 from nltk.stem import WordNetLemmatizer
 
@@ -48,6 +50,7 @@ from sklearn.model_selection import KFold
 
 from sklearn import svm
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import classification_report
 
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics.pairwise import linear_kernel
@@ -82,6 +85,8 @@ stemmer = SnowballStemmer("english")
 wordnet_lemmatizer = WordNetLemmatizer()
 
 settings = []
+original_df = pd.DataFrame()
+
 with open('settings.json') as data_file:
     settings = json.load(data_file)
 
@@ -113,19 +118,16 @@ class Step(ABC):
 #csv loader
 class CsvLoader(Step):
 
-	def __init__(self):
+    def __init__(self):
 		self.datasetName = settings["csv_path"]
-		self.datasetSeparator = settings["csv_separator"]
-
-	def execute(self, o):
-		pprint(self.__class__.__name__)
-		pprint(inspect.stack()[0][3])
-		encoded_df = pd.read_csv(self.datasetName, sep=self.datasetSeparator)
-		encoded_df = encoded_df.fillna(method='ffill')
-		return encoded_df
+        self.datasetSeparator = settings["csv_separator"]
+    def execute(self, o):
+        encoded_df = pd.read_csv(self.datasetName, sep=self.datasetSeparator)
+        encoded_df = encoded_df.fillna(method='ffill')
+        original_df = encoded_df.copy(deep=True)
+        return encoded_df
 
 
-#xlsx loader
 class XlsxLoader(Step):
 
     def __init__(self):
@@ -394,16 +396,21 @@ class TrainTestSplitter(Step):
     def __init__(self):
         self.trainTestRatio = settings["train_test_split_ratio"]
         self.targetColumn = settings["classification_regression_target"]
+        self.shouldShuffle = settings["shuffle"]
 
     def execute(self, df):
         y = df.pop(self.targetColumn)
         X = df
-        X_train,X_test,y_train,y_test = train_test_split(X.index,y,test_size=0.2)
+        X_train,X_test,y_train,y_test = train_test_split(X.index,y,test_size=self.trainTestRatio)
 
         df_train = X.iloc[X_train]
         df_test = X.iloc[X_test]
 
+
         return df_train,df_test,y_train,y_test
+
+
+
 
 
 #Feature inspect
@@ -423,6 +430,26 @@ class FeatureInspector():
         print(len(importantFeatures))
 
 
+#Variance threshold
+
+class VarianceThresholdRemover(Step):
+
+    def __init__(self):
+        self.threshold = settings["variance_threshold"]
+
+
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        local_df = df
+        y = local_df.pop(settings["classification_regression_target"])
+        columns = local_df.columns
+        selector = VarianceThreshold(self.threshold)
+        selector.fit_transform(df)
+        labels = [columns[x] for x in selector.get_support(indices=True) if x]
+        return pd.DataFrame(selector.fit_transform(local_df), columns=labels)
+
+
 #classificaion algorithms
 
 class ClassifierAlgorithm(Step):
@@ -439,15 +466,74 @@ class RFTClassifierAlgorithm(ClassifierAlgorithm):
         self.params = settings["classification_settings"]["rftclassifier_params"]
 
     def execute(self, df):
+
         pprint(self.__class__.__name__)
         pprint(inspect.stack()[0][3])
+
         X_train,X_test,y_train,y_test = self.trainTestSplitDataframe(df)
         clf = RandomForestClassifier(**self.params)
         clf.fit(X_train, y_train)
         fInsp = FeatureInspector()
         fInsp.execute(clf)
         predictions = clf.predict(X_test)
-        print("Accuracy is ", accuracy_score(y_test,predictions)*100,"%", "for params: ", self.params)
+        print("Accuracy is ", classification_report(y_test,predictions), "\n", "for params: ", self.params)
+
+
+class SentimentClassifier(Step):
+
+    def __init__(self):
+        print("Calling init")
+        self.params = settings["classification_settings"]["multilayerperceptron_params"]
+        self.targetColumn = settings["classification_regression_target"]
+        self.trainTestRatio = settings["train_test_split_ratio"]
+
+
+    def execute(self, df):
+
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+
+
+        target_df = df.loc[df[self.targetColumn] == -1]
+        print(target_df.head(5))
+
+        test_train_df = df[df[self.targetColumn]!= -1]
+        print(test_train_df.head(5))
+
+        y_hat = target_df.pop(self.targetColumn)
+        x_hat = target_df
+
+
+        y = test_train_df.pop(self.targetColumn)
+        X = test_train_df
+
+        X_train,X_test,y_train,y_test = train_test_split(X.index,y,test_size=self.trainTestRatio)
+
+        df_train = X.iloc[X_train]
+        df_test = X.iloc[X_test]
+        X_train =  df_train
+        X_test = df_test
+        #for i in range(1, 10):
+        clf = MLPClassifier(**self.params)
+        clf.fit(X_train, y_train)
+
+    #fInsp = FeatureInspector()
+    #fInsp.execute(clf)
+
+        test_predictions = clf.predict(X_test)
+        print("Accuracy is ", classification_report(y_test,test_predictions), "\n", "for params: ", self.params)
+
+
+        predictions = clf.predict(x_hat)
+        print("Predicted classes: ")
+        print(predictions)
+        print("over target ")
+        print(x_hat)
+        print("Original:")
+        print(original_df.head(5))
+
+
+
 
 class SVMClassifierAlgorithm(ClassifierAlgorithm):
     def __init__(self):
@@ -508,7 +594,7 @@ class MultiLayerPerceptronClassifierAlgorithm(ClassifierAlgorithm):
         clf = MLPClassifier(**self.params)
         clf.fit(X_train, y_train)
         predictions = clf.predict(X_test)
-        print("Accuracy is ", accuracy_score(y_test,predictions)*100,"%", "for params: ", self.params)
+        print("Accuracy is ", classification_report(y_test,predictions), "\n", "for params: ", self.params)
 
 class GradientBoostingClassifierAlgorithm(ClassifierAlgorithm):
     def __init__(self):
@@ -611,7 +697,9 @@ class XandraApp():
         s3 = ColumnsEncoder()
         s4 = TfIdfProcessor()
         s5 = Purifier()
-        s6 = ProblemFactory().generate().generate()
+        #s51 = VarianceThresholdRemover()
+        #s6 = ProblemFactory().generate().generate()
+        s6 = SentimentClassifier()
 
         #pipeline.addStep(s0)
         pipeline.addStep(s1)
@@ -619,7 +707,10 @@ class XandraApp():
         pipeline.addStep(s3)
         pipeline.addStep(s4)
         pipeline.addStep(s5)
+        #pipeline.addStep(s51)
+
         pipeline.addStep(s6)
+
         pipeline.executePipeline()
 
 if __name__ == "__main__":
