@@ -1,7 +1,9 @@
 from __future__ import print_function
 
 
-import sysimport pandas as pdimport numpy as np
+import sys
+import pandas as pd
+import numpy as np
 import nltk
 import re
 import json
@@ -69,7 +71,7 @@ import logging
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 
-
+import feedparser
 from sklearn.model_selection import GridSearchCV
 
 import sys
@@ -119,7 +121,7 @@ class Step(ABC):
 class CsvLoader(Step):
 
     def __init__(self):
-		self.datasetName = settings["csv_path"]
+        self.datasetName = settings["csv_path"]
         self.datasetSeparator = settings["csv_separator"]
     def execute(self, o):
         encoded_df = pd.read_csv(self.datasetName, sep=self.datasetSeparator)
@@ -190,47 +192,44 @@ class DocumentLoader(Step):
 #encoders, tranformators, cleaners, removers
 class ColumnsRemover(Step):
 
-	def __init__(self):
-		self.columns = settings["columns_to_remove"]
+    def __init__(self):
+        self.columns = settings["columns_to_remove"]
 
 
-	def execute(self, df):
-		pprint(self.__class__.__name__)
-		pprint(inspect.stack()[0][3])
-		for c in self.columns:
-			df.drop(c, axis=1, inplace=True)
-		pprint(df.head(settings["rows_to_debug"]))
-		return df
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        for c in self.columns:
+            df.drop(c, axis=1, inplace=True)
+        pprint(df.head(settings["rows_to_debug"]))
+        return df
 
 
 
 class ColumnsEncoder(Step):
 
-	def __init__(self):
-		self.columns = settings["columns_to_encode"]
+    def __init__(self):
+        self.columns = settings["columns_to_encode"]
 
-	def execute(self, df):
-		pprint(self.__class__.__name__)
-		pprint(inspect.stack()[0][3])
+    def execute(self, df):
+        pprint(self.__class__.__name__)
+        pprint(inspect.stack()[0][3])
+        encoded = self.transform(df)
+        pprint(encoded.head(settings["rows_to_debug"]))
+        return encoded
 
-		encoded = self.transform(df)
-		pprint(encoded.head(settings["rows_to_debug"]))
-		return encoded
+    def transform(self,X):
+        output = X.copy()
+        if self.columns is not None:
+            for col in self.columns:
+                output[col] = LabelEncoder().fit_transform(output[col])
+        else:
+            for colname,col in output.iteritems():
+                output[colname] = LabelEncoder().fit_transform(col)
+        return output
 
-
-	def transform(self,X):
-
-   		output = X.copy()
-   		if self.columns is not None:
-   			for col in self.columns:
-   				output[col] = LabelEncoder().fit_transform(output[col])
-   		else:
-   			for colname,col in output.iteritems():
-   				output[colname] = LabelEncoder().fit_transform(col)
-   		return output
-
-	def fit_transform(self,X,y=None):
-		return self.fit(X,y).transform(X)
+    def fit_transform(self,X,y=None):
+        return self.fit(X,y).transform(X)
 
 
 
@@ -272,13 +271,11 @@ class TfIdfProcessor(Step):
             X = tfidf_vectorizer.fit_transform(valuesOfDF.astype('U')).toarray()
             for i, col in enumerate(tfidf_vectorizer.get_feature_names()):
                 local_df[col] = X[:, i]
-
         return local_df
 
     def execute(self, df):
         pprint(self.__class__.__name__)
         pprint(inspect.stack()[0][3])
-
         transformed = self.getTfIdfMatrixForDF(df)
         pprint(transformed.head(settings["rows_to_debug"]))
         return transformed
@@ -405,8 +402,6 @@ class TrainTestSplitter(Step):
 
         df_train = X.iloc[X_train]
         df_test = X.iloc[X_test]
-
-
         return df_train,df_test,y_train,y_test
 
 
@@ -425,7 +420,6 @@ class FeatureInspector():
         importantFeatures = list(filter(lambda x: x > 0.0, importances))
         if len(importantFeatures) < 10:
             print(importantFeatures)
-
         print("Number of important features: ")
         print(len(importantFeatures))
 
@@ -517,13 +511,8 @@ class SentimentClassifier(Step):
         clf = MLPClassifier(**self.params)
         clf.fit(X_train, y_train)
 
-    #fInsp = FeatureInspector()
-    #fInsp.execute(clf)
-
         test_predictions = clf.predict(X_test)
         print("Accuracy is ", classification_report(y_test,test_predictions), "\n", "for params: ", self.params)
-
-
         predictions = clf.predict(x_hat)
         print("Predicted classes: ")
         print(predictions)
@@ -683,11 +672,34 @@ class ProblemFactory():
             raise NotImplementedError
 
 
+class RssFeedParser():
+    def __init__(self):
+        self.url = "https://www.theguardian.com/uk/technology/rss"
+    
+    def execute(self, df):
+        python_wiki_rss_url = "https://www.theguardian.com/uk/technology/rss"
+        feed = feedparser.parse( python_wiki_rss_url )
+        #pprint(feed['feed'])
+
+        for item in feed[ "items" ]:
+            print("\n")
+            print(item[ "title" ])
+            summary = re.sub('<[^<]+?>', '', item[ "summary" ])
+            print(summary)
+            print(item[ "link" ])
+
+        pprint(len(feed))
+
 
 
 class XandraApp():
 
     def run(self):
+        fp = RssFeedParser()
+        fp.execute(None)
+        
+        exit(1)
+
         pipeline = Pipeline()
 
         s1 = CsvLoader()
